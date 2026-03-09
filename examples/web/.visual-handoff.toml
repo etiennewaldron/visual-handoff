@@ -1,0 +1,33 @@
+[project]
+name = "example-web"
+instructions = [
+  "Preserve the strongest existing product patterns.",
+  "Keep mixed tasks split so the specialist only handles the visual slice."
+]
+
+[toolkit]
+controller = "Primary agent"
+specialist = "Visual specialist"
+output_dir = "output/visual-handoffs"
+protect_git = true
+ignore = [".git", "node_modules", "dist", "build", ".next"]
+
+[adapters.gemini]
+command = "gemini"
+args = ["--approval-mode", "auto_edit", "--output-format", "text"]
+
+[roles.visual]
+adapter = "gemini"
+profiles = ["visual/base"]
+default_accept = [
+  "Keep changes scoped to visual surfaces.",
+  "If non-visual changes are required, stop and explain them in NEXT_FOR_CONTROLLER.",
+  "Do not interact with local or remote databases, run migrations, or modify persistence/query layers."
+]
+
+[platforms.web]
+profiles = ["visual/web"]
+default_verify = [
+  "Check mobile and desktop layouts.",
+  "Preserve semantics, accessibility, and visual hierarchy."
+]

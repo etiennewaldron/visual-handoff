@@ -1,0 +1,33 @@
+[project]
+name = "example-flutter"
+instructions = [
+  "Preserve the current app voice and flow clarity.",
+  "Keep mixed tasks split so the specialist only handles the visual slice."
+]
+
+[toolkit]
+controller = "Primary agent"
+specialist = "Visual specialist"
+output_dir = "output/visual-handoffs"
+protect_git = true
+ignore = [".git", ".dart_tool", ".idea", "build"]
+
+[adapters.gemini]
+command = "gemini"
+args = ["--approval-mode", "auto_edit", "--output-format", "text"]
+
+[roles.visual]
+adapter = "gemini"
+profiles = ["visual/base"]
+default_accept = [
+  "Keep changes scoped to visual surfaces.",
+  "If non-visual changes are required, stop and explain them in NEXT_FOR_CONTROLLER.",
+  "Do not interact with local or remote databases, run migrations, or modify persistence/query layers."
+]
+
+[platforms.flutter]
+profiles = ["visual/flutter"]
+default_verify = [
+  "Check compact and regular phone widths.",
+  "Preserve semantics, touch targets, and layout clarity."
+]
