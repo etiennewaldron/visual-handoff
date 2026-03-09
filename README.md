@@ -1,144 +1,157 @@
 # Visual Handoff
 
-`visual-handoff` is a small CLI for controller-led delegation of visual work.
+`visual-handoff` is a small CLI for assess-first delegation of UI and visual work.
 
-The intended model is simple:
+Use it when you want one agent to own reasoning, scoping, and orchestration, while a specialist model handles visual critique and UI implementation for a tightly scoped slice.
 
-1. A primary agent frames the task and boundaries.
-2. A specialist agent can assess the UI read-only first.
-3. The primary agent approves a write scope.
-4. The specialist agent handles only that write slice.
-5. The primary agent reviews the result, integrates follow-up, and verifies the outcome.
+Visual Handoff exists because the model you trust most for UI critique and visual polish is not always the one you want making broad repo decisions. Specialist models can be excellent at design work while still being over-eager about git actions, adjacent files, or scope expansion. Visual Handoff keeps the specialist focused on the visual slice: broad enough to inspect the UI properly, narrow enough to keep edits, git behavior, and auditability under control.
 
-The toolkit is portable across web apps, Flutter, SwiftUI, Jetpack Compose, React Native, and docs/decks. The core abstraction is `visual`, not just `frontend`.
+The default path is:
 
-## What It Is
+1. Initialize a repo with `visual-handoff init`.
+2. Run `visual-handoff assess visual ...` to get a read-only visual critique.
+3. Approve a write scope.
+4. Run `visual-handoff run visual ...` for the actual edit.
 
-This toolkit gives you:
+It works across web, Flutter, SwiftUI, Jetpack Compose, React Native, and docs/decks. The core abstraction is `visual`, not just `frontend`.
+
+```text
+Controller agent
+  -> defines the task and constraints
+  -> runs `visual-handoff assess`
+
+visual-handoff
+  -> builds the assessment prompt
+  -> runs the specialist CLI
+
+Visual specialist
+  -> assesses the current UI
+  -> returns visual issues and a suggested write scope
+
+Controller agent
+  -> approves the write scope
+  -> runs `visual-handoff run`
+
+visual-handoff
+  -> builds the implementation prompt
+  -> runs the specialist CLI
+  -> records logs and checks boundaries
+
+Visual specialist
+  -> implements the approved visual slice
+
+Controller agent
+  -> reviews and integrates the result
+```
+
+## What It Gives You
 
 - a standard handoff contract for visual work
 - project-level config via `.visual-handoff.toml`
 - starter templates for common repo types
-- run logs with prompt, response, workspace diffing, and policy checks
+- audit logs with prompt, response, touched paths, and policy checks
 - git mutation blocking during the specialist run
 
-This toolkit does not give you a hard sandbox. It is a guardrailed delegation workflow with auditability, not a full isolation boundary.
+It is a guardrailed delegation workflow with auditability. It is not a hard sandbox.
 
-## Default Path
+## Fast Start
 
-The default out-of-the-box path is:
-
-1. Install `visual-handoff` on the machine.
-2. Install and authenticate `gemini`.
-3. Run `visual-handoff init --template ...` in the target repo.
-4. Use `visual-handoff assess visual ...` to let Gemini critique the UI read-only.
-5. Approve a write scope.
-6. Use `visual-handoff run visual ...` for the actual edit.
-
-Projects can switch to another specialist CLI later, but the starter config uses `gemini` by default.
-
-## Install
-
-Recommended for day-to-day use: install `visual-handoff` once per machine with `pipx`.
-
-From a public GitHub repo:
+Install the CLI once per machine:
 
 ```bash
-pipx install 'git+https://github.com/<your-org>/<your-repo>.git'
+pipx install 'git+https://github.com/etiennewaldron/visual-handoff.git'
 ```
 
-From a local checkout while developing:
+If your `pipx` default Python is older than 3.11, install with an explicit interpreter:
 
 ```bash
-pipx install --editable /path/to/visual-handoff
+pipx install --python python3.11 'git+https://github.com/etiennewaldron/visual-handoff.git'
 ```
 
-On macOS, if `pipx` is not installed yet:
+If you are using the default specialist path, also install and authenticate `gemini`.
+
+Then, in a target repo:
 
 ```bash
-brew install pipx
-```
-
-Verify:
-
-```bash
-visual-handoff --help
-```
-
-If you want the default path, also install and authenticate `gemini` on that machine.
-
-Alternative for an already activated virtual environment or local dev shell:
-
-```bash
-cd /path/to/visual-handoff
-python3 -m pip install -e .
-```
-
-Project repos do not vendor the CLI. They assume `visual-handoff` is already installed and available on `PATH`.
-
-## Quick Start
-
-Initialize a target repo:
-
-```bash
-visual-handoff init --template mixed-visual /path/to/my-app
-```
-
-Start with a read-only visual assessment:
-
-```bash
-cd /path/to/my-app
-visual-handoff assess visual \
-  --platform flutter \
-  --goal "Audit the onboarding flow on smaller phones" \
-  --focus lib/features/onboarding \
-  --verify "Check hierarchy and touch targets on compact widths"
-```
-
-`--cwd` must point to an existing target repo directory. The tool does not create a missing repo path for you.
-
-Then run the approved implementation slice:
-
-```bash
-cd /path/to/my-app
-visual-handoff run visual \
-  --platform flutter \
-  --goal "Refine the onboarding flow for smaller phones" \
-  --allow lib/features/onboarding \
-  --accept "Keep the current color system" \
-  --accept "Improve hierarchy and touch targets on 390px wide screens"
-```
-
-Inspect a prompt without invoking the specialist:
-
-```bash
+cd /path/to/project
+visual-handoff init --template mixed-visual .
 visual-handoff assess visual \
   --platform web \
-  --goal "Polish the pricing page hero" \
-  --focus src/routes/pricing \
-  --dry-run
+  --goal "Audit the settings screen"
 ```
 
-## How To Adopt It In A Repo
+After you approve the suggested scope:
 
-In a new project repo, the controller agent should:
+```bash
+visual-handoff run visual \
+  --platform web \
+  --goal "Redesign the settings screen" \
+  --allow src/routes/settings \
+  --accept "Keep the current brand direction" \
+  --accept "Improve hierarchy, spacing, and CTA clarity"
+```
+
+`--cwd` must point to an existing directory. The tool does not create a missing repo path for you.
+
+## Agent Adoption
+
+The agent should do this:
 
 1. Verify `visual-handoff` is installed and available on `PATH`.
 2. Verify the intended specialist CLI is installed and authenticated.
 3. Run `visual-handoff init --template ...` if the repo does not already have `.visual-handoff.toml`.
-4. Leave `roles.visual.adapter = "gemini"` in place unless the project intentionally uses a different specialist CLI.
-5. Start with `visual-handoff assess visual ... --dry-run` or a real read-only assessment before delegating edits.
-6. Use `visual-handoff run visual ...` only after the controller agrees on the write scope.
+4. Start with `visual-handoff assess visual ...`.
+5. Use `visual-handoff run visual ...` only after the write scope is approved.
 
-Installing `visual-handoff` does not automatically make GPT, Claude, or other agents use it for visual work. That routing behavior is repo-specific. If you want agents working in a project to use `visual-handoff` by default for UI tasks, add that rule to the project's own agent instructions, such as `AGENTS.md`.
+Installing `visual-handoff` does not automatically make GPT, Claude, or other agents use it for visual work. That routing behavior is repo-specific. If you want agents working in a project to use it by default, add that rule to the project's own instructions, such as `AGENTS.md`.
+
+## Templates
+
+`visual-handoff init` supports three starter templates:
+
+- `mixed-visual`: general starter for repos that may delegate across web, mobile, or docs. This is the safest default.
+- `web`: web-focused starter.
+- `flutter`: Flutter-focused starter.
+
+Example:
+
+```bash
+visual-handoff init --template mixed-visual .
+```
+
+`init` writes:
+
+- `.visual-handoff.toml`
+- `AGENTS.handoff.md`
+
+`AGENTS.handoff.md` is a starter routing guide. If your environment relies on a different agent-instruction file such as `AGENTS.md`, copy or adapt that guidance there.
+
+## How It Works
+
+`assess` is read-only. The specialist is asked to inspect the UI and return:
+
+- `VISUAL_ISSUES`
+- `SUGGESTED_WRITE_SCOPE`
+- `PRESERVE`
+- `ACCEPTANCE_CRITERIA`
+
+`run` is the implementation step. The specialist is told:
+
+- this is a delegated visual task
+- stay within allowed paths
+- never touch denied paths
+- do not mutate git
+- stop and report if non-visual changes are required
+
+The controller still owns scope approval, integration, and final verification.
 
 ## Config
 
 The toolkit reads `.visual-handoff.toml` from the current directory or any parent directory.
 
-For built-in names such as `visual`, `web`, or `flutter`, repo config extends the built-in defaults instead of wiping them out. That lets you add repo-specific rules without accidentally removing the base safety contract.
+Repo config extends built-in defaults instead of wiping them out. That lets you add project-specific rules without accidentally removing the base safety contract.
 
-Starter example:
+Minimal example:
 
 ```toml
 [project]
@@ -149,11 +162,8 @@ instructions = [
 ]
 
 [toolkit]
-controller = "Primary agent"
-specialist = "Visual specialist"
 output_dir = "output/visual-handoffs"
 protect_git = true
-ignore = [".git", "node_modules", "dist", "build", ".dart_tool"]
 
 [adapters.gemini]
 command = "gemini"
@@ -162,29 +172,22 @@ args = ["--approval-mode", "auto_edit", "--output-format", "text"]
 [roles.visual]
 adapter = "gemini"
 profiles = ["visual/base"]
-default_accept = [
-  "Keep changes scoped to visual surfaces.",
-  "If non-visual changes are required, stop and explain them in NEXT_FOR_CONTROLLER.",
-  "Do not interact with local or remote databases, run migrations, or modify persistence/query layers."
-]
 
-[platforms.flutter]
-profiles = ["visual/flutter"]
-default_verify = [
-  "Review responsive behavior on compact and regular phone widths.",
-  "Preserve semantics, focus order, and touch target clarity."
-]
+[platforms.web]
+profiles = ["visual/web"]
 ```
 
-If the repo uses the starter config, no extra adapter wiring is needed. `roles.visual.adapter = "gemini"` is already set.
+If you use a starter template, you already get a working Gemini-backed config.
 
-## Custom Adapters
+## Custom Specialists
 
-Projects can define their own specialist adapters. The toolkit supports CLIs that receive the prompt:
+Projects can replace Gemini with another CLI by defining a custom adapter.
 
-- as the final argv value with `prompt_mode = "argv"` (default)
-- on stdin with `prompt_mode = "stdin"`
-- via a `{prompt}` placeholder inside `args`
+Supported prompt delivery modes:
+
+- `prompt_mode = "argv"`: append the prompt as the final argument
+- `prompt_mode = "stdin"`: send the prompt on stdin
+- `{prompt}` placeholder inside `args`
 
 Example:
 
@@ -199,28 +202,11 @@ adapter = "visual_specialist"
 profiles = ["visual/base"]
 ```
 
-Use a custom adapter only when the project wants something other than the default Gemini specialist.
-
 ## Safety Model
 
-Each `run` builds a handoff contract that tells the specialist:
+Each run:
 
-- this is a delegated visual step
-- stay within allowed paths
-- never touch denied paths
-- do not mutate git
-- stop and report when non-visual work is required
-
-Each `assess` run is read-only by contract and asks the specialist to return:
-
-- visual issues
-- suggested write scope
-- preserve constraints
-- proposed acceptance criteria
-
-The toolkit also:
-
-- snapshots the workspace before and after the run
+- snapshots the workspace before and after
 - records touched paths
 - flags allow/deny violations
 - blocks mutating git commands during the specialist run
@@ -234,75 +220,37 @@ What it does not do:
 - it does not prevent arbitrary non-git shell commands by itself
 - it should not be described as a hard security boundary
 
-## CLI
+## Commands
 
-### `visual-handoff init`
+`visual-handoff init`
 
-Bootstraps a target repo with:
+- bootstraps a repo with `.visual-handoff.toml` and `AGENTS.handoff.md`
 
-- `.visual-handoff.toml`
-- `AGENTS.handoff.md`
+`visual-handoff assess`
 
-Examples:
+- runs a delegated read-only visual assessment
+- use `--focus` to point the specialist at the primary surface first
 
-```bash
-visual-handoff init --template web /path/to/site
-visual-handoff init --template flutter /path/to/mobile-app
-visual-handoff init --template mixed-visual /path/to/product
-```
+`visual-handoff run`
 
-### `visual-handoff run`
+- runs the scoped implementation step
+- use `--allow` aggressively to keep writes narrow
 
-Runs a delegated specialist step.
-
-Example:
-
-```bash
-visual-handoff run visual \
-  --platform docs \
-  --goal "Make the launch deck feel more projection-ready" \
-  --allow docs/deck.html \
-  --accept "Reduce chrome and increase whitespace" \
-  --fact "Copy must stay consistent with current product scope"
-```
-
-Important flags:
-
-- `--platform`: selects a built-in platform profile
-- `--allow`: allowed file or directory, repeatable
-- `--deny`: denied file or directory, repeatable
-- `--accept`: acceptance criterion, repeatable
-- `--fact`: fact that must remain true, repeatable
-- `--preserve`: existing element or pattern to preserve, repeatable
-- `--verify`: verification expectation, repeatable
-- `--dry-run`: write handoff artifacts without calling the specialist adapter
-
-### `visual-handoff assess`
-
-Runs a delegated read-only visual assessment.
-
-Example:
+Inspect a prompt without invoking the specialist:
 
 ```bash
 visual-handoff assess visual \
   --platform web \
-  --goal "Audit the pricing page hero before implementation" \
+  --goal "Polish the pricing page hero" \
   --focus src/routes/pricing \
-  --verify "Call out hierarchy, spacing, and responsive risks"
+  --dry-run
 ```
-
-Important flags:
-
-- `--focus`: primary path or surface to inspect first, repeatable
-- `--deny`: denied path, repeatable
-- `--fact`: fact that must remain true, repeatable
-- `--preserve`: existing element or pattern to preserve, repeatable
-- `--verify`: inspection priority to pass to the specialist, repeatable
-- `--dry-run`: write the assessment prompt and logs without calling the specialist adapter
 
 ## Output
 
-Each handoff writes a timestamped record under `output/visual-handoffs/` by default:
+Each handoff writes a timestamped record under `output/visual-handoffs/` by default.
+
+Common files:
 
 - `request.txt`
 - `prompt-context.txt`
@@ -314,25 +262,17 @@ Each handoff writes a timestamped record under `output/visual-handoffs/` by defa
 - `policy-violations.txt`
 - `resume.txt`
 
-When the target repo is a git repository and `protect_git = true`, the run also records git safety artifacts such as:
-
-- `git-head-before.txt`
-- `git-head-after.txt`
-- `git-refs-before.txt`
-- `git-refs-after.txt`
-- `git-stash-before.txt`
-- `git-stash-after.txt`
-- `git-guard-path.txt`
+When the target repo is a git repository and `protect_git = true`, the run also records git safety artifacts such as `git-head-before.txt`, `git-head-after.txt`, and `git-guard-path.txt`.
 
 ## Development
 
-Run the unit tests from a fresh checkout:
+Run tests:
 
 ```bash
 python3.11 -m unittest discover -s tests -v
 ```
 
-Build the distributable package artifacts:
+Build artifacts:
 
 ```bash
 python3.11 -m build
